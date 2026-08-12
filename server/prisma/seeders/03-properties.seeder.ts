@@ -1,0 +1,378 @@
+import { PrismaClient, PropertyStatus, PropertyCategory, ImageTag } from '@prisma/client';
+
+// Plan uses HERITAGE/RESORT which aren't in our enum → mapped to OTHER/HOTEL
+const PROPERTIES = [
+  // ── Rajesh Patel · Ahmedabad ──────────────────────────────────────────────
+  {
+    name: 'Grand Palace Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'A luxurious 5-star experience in the heart of Ahmedabad, offering world-class amenities and unparalleled service.',
+    city: 'Ahmedabad', address: 'SG Highway, Bodakdev, Ahmedabad, Gujarat 380054',
+    lat: 23.0503, lng: 72.5311, starRating: 5,
+    amenities: ['pool', 'spa', 'gym', 'restaurant', 'bar', 'wifi', 'parking', 'ac', 'concierge'],
+    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Heritage Haveli',
+    category: PropertyCategory.OTHER,
+    description: 'Step back in time at our beautifully restored 200-year-old haveli. Experience authentic Gujarati culture with modern comforts.',
+    city: 'Ahmedabad', address: 'Old City, Pol Area, Ahmedabad, Gujarat 380001',
+    lat: 23.0225, lng: 72.5714, starRating: 4,
+    amenities: ['heritage_tour', 'courtyard', 'restaurant', 'wifi', 'ac', 'cultural_shows'],
+    image: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'The Business Suite',
+    category: PropertyCategory.HOTEL,
+    description: 'Purpose-built for the modern business traveller. High-speed WiFi, conference rooms, and proximity to GIFT City.',
+    city: 'Ahmedabad', address: 'GIFT City, Gandhinagar, Gujarat 382355',
+    lat: 23.1672, lng: 72.6830, starRating: 4,
+    amenities: ['conference_room', 'business_center', 'gym', 'wifi', 'parking', 'ac', 'restaurant'],
+    image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Budget Inn Express',
+    category: PropertyCategory.HOSTEL,
+    description: 'Clean, safe, and affordable stays for backpackers and budget travellers exploring Ahmedabad.',
+    city: 'Ahmedabad', address: 'Near Kalupur Railway Station, Ahmedabad, Gujarat 380002',
+    lat: 23.0258, lng: 72.6075, starRating: 2,
+    amenities: ['wifi', 'ac', 'common_kitchen', 'locker'],
+    image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  // ── Priya Sharma · Manali ─────────────────────────────────────────────────
+  {
+    name: 'Mountain View Resort',
+    category: PropertyCategory.OTHER,
+    description: 'A premium Himalayan retreat with breathtaking views of the Rohtang Pass. Includes bonfire evenings and guided treks.',
+    city: 'Manali', address: 'Old Manali Road, Manali, Himachal Pradesh 175131',
+    lat: 32.2396, lng: 77.1887, starRating: 5,
+    amenities: ['spa', 'bonfire', 'trekking', 'restaurant', 'wifi', 'heater', 'mountain_view'],
+    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Snow Peak Cottages',
+    category: PropertyCategory.OTHER,
+    description: 'Cozy wooden cottages surrounded by apple orchards and snow-capped peaks. Perfect for couples and families.',
+    city: 'Manali', address: 'Naggar Road, Kullu, Himachal Pradesh 175101',
+    lat: 31.8979, lng: 77.1075, starRating: 4,
+    amenities: ['bonfire', 'heater', 'mountain_view', 'trekking', 'wifi', 'restaurant'],
+    image: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Valley Camp',
+    category: PropertyCategory.HOSTEL,
+    description: "Adventure seekers' base camp. Dormitory tents and private rooms for budget mountain travellers.",
+    city: 'Manali', address: 'Solang Valley, Manali, Himachal Pradesh 175131',
+    lat: 32.3196, lng: 77.1503, starRating: 2,
+    amenities: ['bonfire', 'trekking', 'wifi', 'common_area', 'heater'],
+    image: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Pine Wood Lodge',
+    category: PropertyCategory.HOTEL,
+    description: 'A mid-range hotel with comfortable rooms, in-house restaurant, and easy access to Manali Mall Road.',
+    city: 'Manali', address: 'Mall Road, Manali, Himachal Pradesh 175131',
+    lat: 32.2394, lng: 77.1912, starRating: 3,
+    amenities: ['restaurant', 'wifi', 'heater', 'parking', 'mountain_view'],
+    image: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  // ── Rajesh Patel · New Delhi ──────────────────────────────────────────────
+  {
+    name: 'The Imperial New Delhi',
+    category: PropertyCategory.HOTEL,
+    description: 'A legendary 5-star hotel in the heart of Connaught Place with colonial architecture, world-class dining, and impeccable service.',
+    city: 'New Delhi', address: 'Janpath, Connaught Place, New Delhi 110001',
+    lat: 28.6139, lng: 77.2090, starRating: 5,
+    amenities: ['pool', 'spa', 'gym', 'restaurant', 'bar', 'wifi', 'parking', 'ac', 'concierge'],
+    image: 'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Old Delhi Heritage Inn',
+    category: PropertyCategory.OTHER,
+    description: 'A beautifully restored heritage property in the lanes of Old Delhi offering an authentic Mughal-era experience.',
+    city: 'New Delhi', address: 'Chandni Chowk, Old Delhi 110006',
+    lat: 28.6562, lng: 77.2300, starRating: 4,
+    amenities: ['heritage_tour', 'restaurant', 'wifi', 'ac', 'cultural_shows', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Delhi Aerocity Business Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'Purpose-built for business travellers near IGI Airport. Seamless connectivity, conference rooms, and 24/7 dining.',
+    city: 'New Delhi', address: 'Aerocity, IGI Airport Area, New Delhi 110037',
+    lat: 28.5562, lng: 77.1232, starRating: 4,
+    amenities: ['conference_room', 'gym', 'wifi', 'parking', 'ac', 'restaurant', 'airport_shuttle'],
+    image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Capital Backpackers Karol Bagh',
+    category: PropertyCategory.HOSTEL,
+    description: 'Budget-friendly hostel in the bustling Karol Bagh market area. Clean dorms, lively common area, rooftop hangout.',
+    city: 'New Delhi', address: 'Karol Bagh, New Delhi 110005',
+    lat: 28.6517, lng: 77.1910, starRating: 2,
+    amenities: ['wifi', 'ac', 'common_kitchen', 'locker', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  // ── Priya Sharma · Bengaluru ──────────────────────────────────────────────
+  {
+    name: 'Garden City Palace Bengaluru',
+    category: PropertyCategory.HOTEL,
+    description: 'Premium 5-star hotel on MG Road. Known for its rooftop infinity pool, award-winning restaurant, and proximity to tech hubs.',
+    city: 'Bengaluru', address: 'MG Road, Bengaluru, Karnataka 560001',
+    lat: 12.9758, lng: 77.6095, starRating: 5,
+    amenities: ['pool', 'spa', 'gym', 'restaurant', 'bar', 'wifi', 'parking', 'ac', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Indiranagar Boutique Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'Stylish boutique property in the heart of Indiranagar. Craft cocktails, curated art, walking distance from 100 Feet Road.',
+    city: 'Bengaluru', address: '100 Feet Road, Indiranagar, Bengaluru 560038',
+    lat: 12.9784, lng: 77.6408, starRating: 4,
+    amenities: ['restaurant', 'bar', 'wifi', 'ac', 'gym', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Whitefield Tech Suites',
+    category: PropertyCategory.HOTEL,
+    description: 'Designed for the modern IT professional. Long-stay suites with kitchenettes, high-speed fibre, and a co-working lounge.',
+    city: 'Bengaluru', address: 'ITPL Road, Whitefield, Bengaluru 560066',
+    lat: 12.9701, lng: 77.7499, starRating: 3,
+    amenities: ['conference_room', 'co_working', 'gym', 'wifi', 'parking', 'ac', 'restaurant'],
+    image: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Koramangala Hostel Hub',
+    category: PropertyCategory.HOSTEL,
+    description: "Social hostel in Koramangala, Bengaluru's startup neighborhood. Pods, events, and networking for digital nomads.",
+    city: 'Bengaluru', address: '5th Block, Koramangala, Bengaluru 560095',
+    lat: 12.9352, lng: 77.6245, starRating: 2,
+    amenities: ['wifi', 'co_working', 'common_kitchen', 'locker', 'ac', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  // ── Rajesh Patel · Jaipur ─────────────────────────────────────────────────
+  {
+    name: 'Pink City Palace Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'A palatial 5-star property in Civil Lines with Rajasthani architecture, elephant rides, and rooftop dining overlooking the Pink City.',
+    city: 'Jaipur', address: 'Civil Lines, Jaipur, Rajasthan 302006',
+    lat: 26.9124, lng: 75.7873, starRating: 5,
+    amenities: ['pool', 'spa', 'gym', 'restaurant', 'bar', 'wifi', 'parking', 'ac', 'heritage_tour'],
+    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Rajput Heritage Haveli Jaipur',
+    category: PropertyCategory.OTHER,
+    description: 'An opulent 300-year-old haveli converted into a luxury stay. Frescoed walls, courtyard, and traditional folk performances.',
+    city: 'Jaipur', address: 'Old City, Jaipur, Rajasthan 302002',
+    lat: 26.9239, lng: 75.8267, starRating: 4,
+    amenities: ['heritage_tour', 'courtyard', 'restaurant', 'wifi', 'ac', 'cultural_shows'],
+    image: 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Jaipur Garden Resort',
+    category: PropertyCategory.OTHER,
+    description: 'A serene resort set in lush gardens on the Amer Road. Ayurvedic spa, desert safari arrangements, and polo grounds.',
+    city: 'Jaipur', address: 'Amer Road, Jaipur, Rajasthan 302028',
+    lat: 26.9855, lng: 75.8513, starRating: 4,
+    amenities: ['pool', 'spa', 'restaurant', 'wifi', 'parking', 'ac', 'yoga'],
+    image: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  {
+    name: 'Budget Fort View Inn Jaipur',
+    category: PropertyCategory.HOSTEL,
+    description: 'Affordable stay near Jaipur Railway Station. Clean rooms, rooftop with fort view, helpful staff for city tours.',
+    city: 'Jaipur', address: 'Station Road, Jaipur, Rajasthan 302006',
+    lat: 26.9196, lng: 75.7879, starRating: 2,
+    amenities: ['wifi', 'ac', 'rooftop', 'common_area'],
+    image: 'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=800',
+    ownerKey: 'rajesh@grandpalace.com',
+  },
+  // ── Priya Sharma · Rishikesh ──────────────────────────────────────────────
+  {
+    name: 'Ganga View Retreat Rishikesh',
+    category: PropertyCategory.OTHER,
+    description: 'A tranquil riverside retreat near Laxman Jhula. Daily yoga sessions, Ganga aarti views, and organic vegetarian meals.',
+    city: 'Rishikesh', address: 'Laxman Jhula, Rishikesh, Uttarakhand 249302',
+    lat: 30.1290, lng: 78.3219, starRating: 4,
+    amenities: ['yoga', 'riverside', 'restaurant', 'wifi', 'heater', 'meditation'],
+    image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  {
+    name: 'Tapovan Yoga Hostel',
+    category: PropertyCategory.HOSTEL,
+    description: 'A spiritual backpacker hostel in Tapovan. Shared dorms, morning yoga, campfire evenings, and affordable Ganga-side living.',
+    city: 'Rishikesh', address: 'Tapovan, Rishikesh, Uttarakhand 249192',
+    lat: 30.1383, lng: 78.3147, starRating: 2,
+    amenities: ['yoga', 'bonfire', 'wifi', 'common_area', 'heater'],
+    image: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800',
+    ownerKey: 'priya@mountainview.com',
+  },
+  // ── Arjun Mehta · Varanasi ────────────────────────────────────────────────
+  {
+    name: 'Ganges Ghats Heritage Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'A boutique hotel steps from Dashashwamedh Ghat. Watch the famous Ganga Aarti from the rooftop every evening.',
+    city: 'Varanasi', address: 'Dashashwamedh Ghat Road, Varanasi, UP 221001',
+    lat: 25.3042, lng: 83.0109, starRating: 4,
+    amenities: ['rooftop', 'restaurant', 'wifi', 'ac', 'heritage_tour', 'boat_ride'],
+    image: 'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Holy City Hostel Varanasi',
+    category: PropertyCategory.HOSTEL,
+    description: 'Budget stay near Assi Ghat. Spiritual atmosphere, rooftop Ganga views, walking distance to the old city lanes.',
+    city: 'Varanasi', address: 'Assi Ghat, Varanasi, Uttar Pradesh 221005',
+    lat: 25.2837, lng: 82.9972, starRating: 2,
+    amenities: ['wifi', 'rooftop', 'common_area', 'ac'],
+    image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  // ── Arjun Mehta · Mumbai ──────────────────────────────────────────────────
+  {
+    name: 'Marine Drive Grand Hotel',
+    category: PropertyCategory.HOTEL,
+    description: "Iconic 5-star hotel overlooking the Queen's Necklace. Rooftop infinity pool, sunset cocktails, world-class cuisine.",
+    city: 'Mumbai', address: 'Marine Drive, Mumbai, Maharashtra 400020',
+    lat: 18.9436, lng: 72.8231, starRating: 5,
+    amenities: ['pool', 'spa', 'gym', 'restaurant', 'bar', 'wifi', 'parking', 'ac', 'sea_view'],
+    image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Bandra West Boutique Hotel',
+    category: PropertyCategory.HOTEL,
+    description: "Chic boutique hotel in Mumbai's hippest neighbourhood. Eclectic décor, rooftop café, minutes from Bandstand.",
+    city: 'Mumbai', address: 'Linking Road, Bandra West, Mumbai 400050',
+    lat: 19.0596, lng: 72.8295, starRating: 4,
+    amenities: ['restaurant', 'bar', 'wifi', 'ac', 'gym', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Gateway Colaba Hotel',
+    category: PropertyCategory.HOTEL,
+    description: 'Heritage hotel in Colaba near the Gateway of India. Colonial charm meets modern comfort, steps from iconic landmarks.',
+    city: 'Mumbai', address: 'Colaba Causeway, Mumbai, Maharashtra 400005',
+    lat: 18.9220, lng: 72.8330, starRating: 4,
+    amenities: ['restaurant', 'bar', 'wifi', 'ac', 'heritage_tour', 'sea_view'],
+    image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Dadar Budget Hostel',
+    category: PropertyCategory.HOSTEL,
+    description: "Clean, central, affordable. Dadar is Mumbai's crossroads — local trains, markets, and great street food at your doorstep.",
+    city: 'Mumbai', address: 'Dadar West, Mumbai, Maharashtra 400028',
+    lat: 19.0178, lng: 72.8478, starRating: 2,
+    amenities: ['wifi', 'ac', 'common_kitchen', 'locker'],
+    image: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  // ── Arjun Mehta · Goa ────────────────────────────────────────────────────
+  {
+    name: 'Coastal Breeze Resort',
+    category: PropertyCategory.OTHER,
+    description: "Goa's premier beachfront resort. Infinity pool, water sports, award-winning seafood restaurant.",
+    city: 'Goa', address: 'Calangute Beach Road, North Goa, Goa 403516',
+    lat: 15.5440, lng: 73.7528, starRating: 5,
+    amenities: ['pool', 'spa', 'beach_access', 'water_sports', 'restaurant', 'bar', 'wifi', 'ac'],
+    image: 'https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Beachfront Villa',
+    category: PropertyCategory.VILLA,
+    description: 'Private luxury villa steps from the beach. Exclusive private pool, fully equipped kitchen, and personal butler.',
+    city: 'Goa', address: 'Vagator, North Goa, Goa 403509',
+    lat: 15.6010, lng: 73.7390, starRating: 4,
+    amenities: ['private_pool', 'beach_access', 'kitchen', 'wifi', 'ac', 'bbq'],
+    image: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'Sunset Shack',
+    category: PropertyCategory.HOSTEL,
+    description: 'Chill backpacker hostel in South Goa. Yoga sessions, beach walks, and a vibrant common area.',
+    city: 'Goa', address: 'Palolem Beach, South Goa, Goa 403702',
+    lat: 15.0100, lng: 74.0230, starRating: 2,
+    amenities: ['beach_access', 'common_kitchen', 'wifi', 'locker', 'ac'],
+    image: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+  {
+    name: 'The Goa Boutique',
+    category: PropertyCategory.HOTEL,
+    description: 'Stylish boutique hotel with a rooftop bar and curated local art. Walking distance from Anjuna Flea Market.',
+    city: 'Goa', address: 'Anjuna, North Goa, Goa 403509',
+    lat: 15.5748, lng: 73.7401, starRating: 4,
+    amenities: ['pool', 'restaurant', 'bar', 'wifi', 'ac', 'rooftop'],
+    image: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800',
+    ownerKey: 'arjun@coastalresort.com',
+  },
+];
+
+export async function seedProperties(
+  prisma:  PrismaClient,
+  userIds: Record<string, string>,
+): Promise<string[]> {
+  console.log('🌱 Seeding properties...');
+  const propertyIds: string[] = [];
+
+  for (const p of PROPERTIES) {
+    const existing = await prisma.property.findFirst({
+      where: { name: p.name, ownerId: userIds[p.ownerKey] },
+    });
+
+    const property = existing ?? await prisma.property.create({
+      data: {
+        ownerId:    userIds[p.ownerKey],
+        name:       p.name,
+        category:   p.category,
+        description: p.description,
+        city:       p.city,
+        address:    p.address,
+        lat:        p.lat,
+        lng:        p.lng,
+        starRating: p.starRating,
+        status:     PropertyStatus.ACTIVE,
+        amenities:  p.amenities,
+      },
+    });
+
+    // Create cover image
+    const imageExists = await prisma.propertyImage.findFirst({ where: { propertyId: property.id } });
+    if (!imageExists) {
+      const image = await prisma.propertyImage.create({
+        data: { propertyId: property.id, url: p.image, tag: ImageTag.EXTERIOR, sortOrder: 0 },
+      });
+      console.log(`    📸 Image created: ${image.url}`);
+    }
+
+    propertyIds.push(property.id);
+    console.log(`  ✅ [${p.category}] ${p.name} — ${p.city}`);
+  }
+
+  return propertyIds;
+}
