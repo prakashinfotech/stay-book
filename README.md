@@ -1,6 +1,6 @@
-# StayBook — Hotel Booking E-Commerce System
+# StayBook — E-Commerce System
 
-A full-stack hotel booking platform built as a Booking.com MVP clone. The system consists of three independently deployable components: a **Node.js REST API**, a **React web client**, and a **Flutter mobile app**, all sharing the same backend and JWT authentication.
+Stay Booking platform system consists of three independently deployable components: a **Node.js REST API**, a **React web client**, and a **Flutter mobile app**, all sharing the same backend and JWT authentication.
 
 ---
 
