@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(PGPASSWORD=postgres \"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"CREATE DATABASE booking_dev;\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -c \"CREATE DATABASE booking_dev;\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/18/bin/psql\" -U postgres -d booking_dev -c \"\\\\dt\")",
+      "WebFetch(domain:www.booking.com)"
+    ]
+  }
+}

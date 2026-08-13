@@ -1,0 +1,320 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(uuid())
+  email             String             @unique
+  passwordHash      String             @map("password_hash")
+  role              Role               @default(CUSTOMER)
+  emailVerified     Boolean            @default(false) @map("email_verified")
+  firstName         String?            @map("first_name")
+  lastName          String?            @map("last_name")
+  refreshToken      String?            @map("refresh_token")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  deletedAt         DateTime?          @map("deleted_at")
+  availabilityHolds AvailabilityHold[]
+  bookings          Booking[]
+  otpTokens         OtpToken[]
+  properties        Property[]
+  auditLogs         AdminAuditLog[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model OtpToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_tokens")
+}
+
+model Property {
+  id               String                   @id @default(uuid())
+  ownerId          String                   @map("owner_id")
+  name             String
+  description      String?
+  address          String
+  city             String
+  postcode         String?
+  lat              Float?
+  lng              Float?
+  category         PropertyCategory
+  subCategory      String?                  @map("sub_category")
+  status           PropertyStatus           @default(DRAFT)
+  starRating       Int?                     @map("star_rating")
+  bookingMode      BookingMode              @default(INSTANT) @map("booking_mode")
+  amenities        Json                     @default("[]")
+  rejectionReason  String?                  @map("rejection_reason")
+  reviewedAt       DateTime?                @map("reviewed_at")
+  reviewedBy       String?                  @map("reviewed_by")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+  search_vector    Unsupported("tsvector")?
+  availability     Availability[]
+  availabilityHolds AvailabilityHold[]
+  bookings         Booking[]
+  partnerLegal     PartnerLegal?
+  owner            User                     @relation(fields: [ownerId], references: [id])
+  images           PropertyImage[]
+  roomTypes        RoomType[]
+
+  @@index([city, status])
+  @@index([amenities], map: "idx_properties_amenities", type: Gin)
+  @@index([city], map: "idx_properties_city")
+  @@index([search_vector], map: "idx_properties_search", type: Gin)
+  @@index([status], map: "idx_properties_status")
+  @@map("properties")
+}
+
+model PropertyImage {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  url        String
+  tag        ImageTag
+  sortOrder  Int      @default(0) @map("sort_order")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("property_images")
+}
+
+model RoomType {
+  id                 String             @id @default(uuid())
+  propertyId         String             @map("property_id")
+  name               String
+  description        String?
+  maxOccupancy       Int                @map("max_occupancy")
+  bedConfig          Json               @map("bed_config")
+  basePrice          Decimal            @map("base_price") @db.Decimal(10, 2)
+  mealPlan           MealPlan           @default(NONE) @map("meal_plan")
+  cancellationPolicy CancellationPolicy @default(FLEXIBLE) @map("cancellation_policy")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  availability       Availability[]
+  availabilityHolds  AvailabilityHold[]
+  bookings           Booking[]
+  ratePlans          RatePlan[]
+  property           Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("room_types")
+}
+
+model RatePlan {
+  id              String       @id @default(uuid())
+  roomTypeId      String       @map("room_type_id")
+  planType        RatePlanType @default(STANDARD) @map("plan_type")
+  discountPercent Decimal      @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  minNights       Int          @default(1) @map("min_nights")
+  bookings        Booking[]
+  roomType        RoomType     @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@map("rate_plans")
+}
+
+model Availability {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  roomTypeId String   @map("room_type_id")
+  date       DateTime @db.Date
+  isBlocked  Boolean  @default(false) @map("is_blocked")
+  bookingId  String?  @map("booking_id")
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([roomTypeId, date])
+  @@index([propertyId, date])
+  @@index([roomTypeId, date], map: "idx_availability_room")
+  @@map("availability")
+}
+
+model AvailabilityHold {
+  id         String   @id @default(uuid())
+  roomTypeId String   @map("room_type_id")
+  propertyId String   @map("property_id")
+  userId     String   @map("user_id")
+  checkin    DateTime @db.Date
+  checkout   DateTime @db.Date
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType   RoomType @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt], map: "idx_holds_expires")
+  @@map("availability_holds")
+}
+
+model Booking {
+  id                   String             @id @default(uuid())
+  userId               String             @map("user_id")
+  propertyId           String             @map("property_id")
+  roomTypeId           String             @map("room_type_id")
+  ratePlanId           String             @map("rate_plan_id")
+  checkin              DateTime           @db.Date
+  checkout             DateTime           @db.Date
+  adults               Int
+  children             Int                @default(0)
+  totalPrice           Decimal            @map("total_price") @db.Decimal(10, 2)
+  status               BookingStatus      @default(CONFIRMED)
+  confirmationNumber   String             @unique @map("confirmation_number")
+  pin                  String
+  paymentTransactionId String?            @map("payment_transaction_id")
+  refundAmount         Decimal?           @map("refund_amount") @db.Decimal(10, 2)
+  guestName            String             @map("guest_name")
+  guestEmail           String             @map("guest_email")
+  guestPhone           String             @map("guest_phone")
+  guestCountry         String             @map("guest_country")
+  specialRequests      String?            @map("special_requests")
+  arrivalTime          String?            @map("arrival_time")
+  cancellationReason   String?            @map("cancellation_reason")
+  cancelledAt          DateTime?          @map("cancelled_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  availability         Availability[]
+  property             Property           @relation(fields: [propertyId], references: [id])
+  ratePlan             RatePlan           @relation(fields: [ratePlanId], references: [id])
+  roomType             RoomType           @relation(fields: [roomTypeId], references: [id])
+  user                 User               @relation(fields: [userId], references: [id])
+  paymentSimulation    PaymentSimulation?
+
+  @@index([propertyId], map: "idx_bookings_property")
+  @@index([userId, status], map: "idx_bookings_user")
+  @@map("bookings")
+}
+
+model PaymentSimulation {
+  id               String   @id @default(uuid())
+  bookingId        String?  @unique @map("booking_id")
+  transactionId    String   @map("transaction_id")
+  cardholderName   String   @map("cardholder_name")
+  cardLastFour     String   @map("card_last_four") @db.Char(4)
+  simulatedFailure Boolean  @default(false) @map("simulated_failure")
+  success          Boolean
+  failureReason    String?  @map("failure_reason")
+  createdAt        DateTime @default(now()) @map("created_at")
+  booking          Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId])
+  @@map("payment_simulations")
+}
+
+model PartnerLegal {
+  id                 String     @id @default(uuid())
+  propertyId         String     @unique @map("property_id")
+  entityType         EntityType @map("entity_type")
+  firstName          String     @map("first_name")
+  lastName           String     @map("last_name")
+  dateOfBirth        DateTime   @map("date_of_birth") @db.Date
+  pan                String?
+  aadhaar            String?
+  gst                String?
+  phone              String
+  kycStatus          KycStatus  @default(KYC_PENDING) @map("kyc_status")
+  kycRejectionReason String?    @map("kyc_rejection_reason")
+  kycReviewedAt      DateTime?  @map("kyc_reviewed_at")
+  kycReviewedBy      String?    @map("kyc_reviewed_by")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  property           Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@map("partner_legal")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(uuid())
+  adminId    String   @map("admin_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  note       String?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  admin      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([entityType, entityId])
+  @@map("admin_audit_logs")
+}
+
+enum KycStatus {
+  KYC_PENDING
+  KYC_APPROVED
+  KYC_REJECTED
+}
+
+enum Role {
+  CUSTOMER
+  PARTNER
+  ADMIN
+}
+
+enum PropertyStatus {
+  ACTIVE
+  DRAFT
+  PAUSED
+  PENDING_REVIEW
+}
+
+enum PropertyCategory {
+  HOTEL
+  APARTMENT
+  VILLA
+  HOSTEL
+  OTHER
+}
+
+enum BookingMode {
+  INSTANT
+  REQUEST
+}
+
+enum MealPlan {
+  NONE
+  BREAKFAST
+}
+
+enum CancellationPolicy {
+  FLEXIBLE
+  NON_REFUNDABLE
+}
+
+enum RatePlanType {
+  STANDARD
+  NON_REFUNDABLE
+  WEEKLY
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  PENDING_APPROVAL
+}
+
+enum ImageTag {
+  EXTERIOR
+  BEDROOM
+  BATHROOM
+  DINING
+  COMMON
+}
+
+enum EntityType {
+  INDIVIDUAL
+  BUSINESS
+}
