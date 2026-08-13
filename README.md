@@ -1,192 +1,216 @@
-# StayBook — E-Commerce System
+<!-- e:\Projects\POC\stay-book\README.md -->
+# 🏨 StayBook — E-Commerce Stay Booking Platform
 
-Stay Booking platform system consists of three independently deployable components: a **Node.js REST API**, a **React web client**, and a **Flutter mobile app**, all sharing the same backend and JWT authentication.
+[![Status](https://img.shields.io/badge/Status-Active_Development-yellow)](Documentation/Claude_web/final_documentation.md)
+[![Server](https://img.shields.io/badge/Server-Node.js_%2B_Express_%2B_Prisma-339933)](server)
+[![Web Client](https://img.shields.io/badge/Web-React_18_%2B_Vite_%2B_TS-61DAFB)](client)
+[![Mobile App](https://img.shields.io/badge/Mobile-Flutter_3.9.2_%2B_BLoC-02569B)](flutter)
+[![Database](https://img.shields.io/badge/Database-PostgreSQL_15%2B-336791)](server/prisma)
+[![Git Repo](https://img.shields.io/badge/Git-prakashinfotech%2Fstay--book-black)](https://github.com/prakashinfotech/stay-book.git)
+
+**StayBook** is a full-featured Booking.com-style hotel and accommodation booking platform. It features three independently deployable components: a **Node.js REST API**, a **React Web Client**, and a **Flutter Mobile App**, all backed by PostgreSQL, Prisma ORM, and JWT authentication with email OTP verification. The system delivers an end-to-end customer booking journey, partner KYC/onboarding & listing management, and administrator controls.
+
+> 🚧 This repository is actively developed as a production-grade multi-platform MVP. See [`Documentation/Claude_web/final_documentation.md`](Documentation/Claude_web/final_documentation.md) for full project specs.
 
 ---
 
-## 📦 Repository Structure
+## 🏗️ Architecture Overview
 
+Built as a **Router → Middleware → Controller → Service → Repository → Prisma ORM** layered REST API behind a feature-driven React SPA and a Clean Architecture Flutter app. Concurrency for room reservations is managed via 15-minute TTL `availability_holds` with automated background garbage collection, and confirmed bookings are processed within atomic Prisma database transactions.
+
+```mermaid
+graph TD
+    subgraph "Clients"
+        Web["React Web App (React 18 + Vite + TS)"] --> WebStore["Zustand State (Persisted Auth & Checkout)"]
+        WebStore --> WebAxios["Axios + JWT Interceptor"]
+        
+        Mobile["Flutter Mobile App (Flutter 3.9.2 + Dart)"] --> MobileBloc["BLoC / Cubit (Clean Architecture)"]
+        MobileBloc --> MobileStorage["Flutter SecureStorage & Dio Client"]
+    end
+
+    subgraph "Backend API (Node.js + Express + TS)"
+        Router["Express Router (/api/v1)"] --> Middleware["Zod Validation & JWT Auth Guard"]
+        Middleware --> Controllers["Controllers"]
+        Controllers --> Services["Business Services"]
+        Services --> Repos["Repository Layer"]
+        Repos --> Prisma["Prisma ORM 5"]
+        Services --> HoldGC["Hold GC Job (15-min TTL Sweep)"]
+    end
+
+    subgraph "Infrastructure & Data"
+        DB[("PostgreSQL 15+ (tsvector + Triggers)")]
+        MediaProxy["Media Proxy Router"]
+        Email["Email / OTP Service"]
+        Payment["Payment Gateway (Simulation / Razorpay)"]
+    end
+
+    WebAxios -.->|HTTP REST| Router
+    MobileStorage -.->|HTTP REST| Router
+    Prisma --> DB
+    HoldGC --> DB
+    Services -.-> MediaProxy
+    Services -.-> Email
+    Services -.-> Payment
 ```
-Booking-Ecommerce-System/
-├── server/          ← Express + TypeScript + Prisma (REST API)
-├── client/          ← React 18 + Vite + TypeScript (Web App)
-└── flutter/         ← Flutter 3.9.2 + Dart (Mobile App)
+
+### Key Design Decisions
+
+- **Multi-Client Unified API**: React Web SPA and Flutter Mobile App share a unified Express TypeScript REST API (`/api/v1`) with identical JWT auth and payload schemas.
+- **Atomic Room Locks & Hold GC**: Temporary 15-minute slot reservations (`availability_holds`) are managed by a background sweep job, preventing double-booking before final payment.
+- **Transactional Booking Confirmation**: Atomic `$transaction` in Prisma handles booking creation, availability grid locking, hold deletion, and payment audit logging.
+- **Secure Dual-Token Auth + OTP**: Access tokens (1h TTL) + Refresh tokens (7d TTL) with 6-digit email OTP verification. Web uses Zustand `persist`, mobile uses `flutter_secure_storage`.
+- **PostgreSQL Full-Text Search**: Optimized property search utilizing PostgreSQL `tsvector` (`search_vector` column managed via DB triggers) with fallback to `ILIKE`.
+- **Partner KYC & Onboarding Workflow**: Multi-step partner legal entity setup (`partner_legal`), identity & address validation, and listing publish flow.
+
+---
+
+## ✨ Key Highlights
+
+- **Complete Customer Booking Flow**: Search destination/dates → Property details & room selection → 15-min room hold → Guest details → Card payment → Confirmation with PIN & PDF export.
+- **Cross-Platform Parity**: Full-featured React 18 web application alongside a native-performance Flutter 3.9.2 mobile application for iOS & Android.
+- **Partner Portal & KYC**: Partner dashboard to manage properties, room types, rate plans, availability grids, KYC verification, and booking approval/decline requests.
+- **Clean Architecture & State Management**: Zustand with persistence on Web; Clean Architecture (Domain, Data, Presentation) + BLoC/Cubit pattern on Mobile.
+- **Automated Input Validation**: Zero unvalidated API requests — end-to-end Zod schemas on server and client, and Dart form validators on mobile.
+- **Media Optimization Proxy**: Centralized media router for proxying, caching, and compressing external property image assets.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technologies Used |
+| :--- | :--- |
+| **Backend API** | Node.js, Express, TypeScript, Prisma ORM 5, Zod, Winston Logger, Morgan, Nodemailer |
+| **Web Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Zustand, React Query, React Router v6, React Hook Form + Zod |
+| **Mobile App** | Flutter 3.9.2, Dart, BLoC / Cubit, Clean Architecture, GetIt (DI), Dio, go_router, flutter_secure_storage |
+| **Database** | PostgreSQL 15+ (with `tsvector` full-text search triggers) |
+| **Authentication** | JWT (HS256 short-lived access + refresh rotation), BCrypt (cost 12), 6-digit Email OTP |
+| **Monorepo Tools** | Turborepo, npm workspaces |
+| **Testing** | Jest / Vitest (server/client), Flutter Test + `flutter analyze` (mobile) |
+
+---
+
+## 📁 Repository Directory Structure
+
+```text
+stay-book/
+├── .claude/                   # Claude Code configs & rules
+├── Documentation/             # Architecture, design docs, final documentation
+│   ├── Claude_web/            # Deep-dive specs & PRD (final_documentation.md, fullstack-guide.md)
+│   └── Doc/                   # Design specifications
+├── client/                    # React 18 + Vite + TypeScript Web Application
+│   ├── src/
+│   │   ├── api/               # Axios instances & endpoint modules
+│   │   ├── components/        # Layout (Header, PageWrapper) & UI primitives (Button, Input, Badge, StarRating)
+│   │   ├── features/          # Auth, Search, Property Detail, Checkout, Trips, Partner
+│   │   ├── store/             # Zustand stores (auth.store, checkout.store)
+│   │   └── router/            # React Router v6 configuration & guards
+├── server/                    # Express + TypeScript + Prisma REST API
+│   ├── prisma/                # Schema definitions (schema.prisma), migrations & seed script
+│   └── src/
+│       ├── common/            # Errors, auth/roles/validate middleware, utils
+│       ├── modules/           # Auth, Users, Properties, Search, Bookings, Partners, Media
+│       └── jobs/              # Availability hold Garbage Collection (hold-gc.job.ts)
+├── flutter/                   # Flutter 3.9.2 Mobile Application (iOS & Android)
+│   ├── lib/
+│   │   ├── core/              # Network (Dio), theme, router (go_router), utils
+│   │   ├── features/          # Auth, Search, Property, Checkout, Trips (Clean Architecture + BLoC)
+│   │   ├── app.dart           # App root & theme provider
+│   │   └── main.dart          # Entry point & Dependency Injection init
+├── turbo.json                 # Turborepo build & dev pipeline configuration
+├── package.json               # Root monorepo workspace definition
+└── README.md
 ```
 
 ---
 
-## 🏗️ Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **Backend API** | Node.js, Express, TypeScript, Prisma ORM, PostgreSQL |
-| **Web Frontend** | React 18, Vite, TypeScript, Tailwind CSS, Zustand, React Query |
-| **Mobile App** | Flutter 3.9.2, Dart, BLoC/Cubit, Clean Architecture, go_router |
-| **Database** | PostgreSQL 15+ |
-| **Auth** | JWT (Access + Refresh Token), OTP email verification |
-| **Validation** | Zod (server + client), Flutter form validators |
-
----
-
-## 🚀 Quick Start
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- PostgreSQL 15 running on `localhost:5432`
-- Flutter SDK 3.9.2+
-- Android Emulator / iOS Simulator (for mobile)
+- [Node.js 18+](https://nodejs.org/) & npm 10+
+- [PostgreSQL 15+](https://www.postgresql.org/) running locally on `localhost:5432`
+- [Flutter SDK 3.9.2+](https://docs.flutter.dev/) (for running the mobile app)
+- Android Emulator / iOS Simulator (optional for mobile dev)
 
-### 1. Start the Backend Server
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/prakashinfotech/stay-book.git
+cd stay-book
+```
+
+### 2. Backend Server Setup
 
 ```bash
 cd server
-cp .env.example .env        # fill in DATABASE_URL, JWT_SECRET
+
+# Copy environment variables template and configure secrets
+cp .env.example .env
+
+# Install dependencies & generate Prisma client
 npm install
-npm run db:migrate          # apply schema migrations
-npm run db:seed             # seed test accounts
-npm run dev                 # starts on http://localhost:3001
+npm run db:generate
+
+# Run database migrations & seed test accounts
+npm run db:migrate
+npm run db:seed
+
+# Start backend dev server (starts on http://localhost:3001)
+npm run dev
 ```
 
-### 2. Start the Web Client
+### 3. Web Client Setup (New Terminal)
 
 ```bash
 cd client
+
+# Install dependencies
 npm install
-npm run dev                 # starts on http://localhost:3000
+
+# Start Vite development server (starts on http://localhost:3000)
+npm run dev
 ```
 
-### 3. Run the Flutter Mobile App
+### 4. Flutter Mobile App Setup (New Terminal)
 
 ```bash
 cd flutter
+
+# Fetch Dart dependencies
 flutter pub get
-flutter run                 # connects to http://10.0.2.2:3001 (Android emulator)
+
+# Run on emulator/device (connects to http://10.0.2.2:3001 for Android or http://localhost:3001 for iOS)
+flutter run
 ```
 
 ---
 
-## 🌐 Server — REST API
+## 🔑 Environment Variables Reference
 
-> **Port:** `3001` &nbsp;|&nbsp; **Prefix:** `/api/v1`
-
-### Environment Variables (`server/.env`)
+### Backend (`server/.env`)
 
 ```env
 NODE_ENV=development
 PORT=3001
 CLIENT_URL=http://localhost:3000
+
 DATABASE_URL=postgresql://postgres:1234@localhost:5432/booking_dev?schema=public
-JWT_SECRET=<min 20 chars>
+
+JWT_SECRET=your_super_secret_jwt_key_min_20_chars
 JWT_EXPIRATION=1h
-JWT_REFRESH_SECRET=<min 20 chars>
+JWT_REFRESH_SECRET=your_super_secret_refresh_key_min_20_chars
+
 SIMULATE_PAYMENT_FAILURE=false
+
+# Optional in Dev / Required in Production
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET=
+AWS_SQS_QUEUE_URL=
 ```
 
-### Key Commands
-
-```bash
-npm run dev                   # Start with hot-reload (nodemon + ts-node)
-npm run build                 # Compile TypeScript → dist/
-npm run lint                  # ESLint
-npm run db:generate           # Regenerate Prisma typed client
-npm run db:migrate            # Apply pending migrations
-npm run db:studio             # Prisma Studio UI at localhost:5555
-npm run db:seed               # Seed test accounts
-```
-
-### API Endpoints
-
-#### Auth — `/api/v1/auth`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/register` | — | Create account, send OTP |
-| POST | `/verify-otp` | — | Verify OTP → return JWT |
-| POST | `/login` | — | Returns `{ accessToken, refreshToken, user }` |
-| POST | `/refresh` | — | Rotate tokens |
-| POST | `/logout` | JWT | Clear refresh token |
-| POST | `/resend-otp` | — | Resend OTP to email (validation + rate limit) |
-
-> **Dev OTP**: printed to terminal as `[DEV] OTP email to <email>: <code>`
-
-#### Search — `/api/v1/search`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/?destination=&checkin=&checkout=&adults=` | — | Full-text + availability search, supports filtering & sorting |
-| GET | `/suggestions?q=` | — | City autocomplete |
-| GET | `/categories` | — | Exploratory categories (Hotel, Resort, Villa, Heritage, Hostel) |
-
-#### Properties — `/api/v1/properties`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/:id` | — | Property detail with rooms + rate plans |
-| POST | `/` | PARTNER | Create listing (DRAFT) |
-| PATCH | `/:id` | PARTNER | Update listing |
-| POST | `/:id/publish` | PARTNER | DRAFT → ACTIVE |
-
-#### Partner KYC & Onboarding — `/api/v1/partners`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/kyc` | PARTNER | Submit KYC (phone, identity, address) |
-| GET | `/kyc` | PARTNER | Get KYC status + validation messages |
-| PATCH | `/kyc` | PARTNER | Update KYC information |
-| POST | `/:id/bookings/:bookingId/approve` | PARTNER | Approve booking |
-| POST | `/:id/bookings/:bookingId/decline` | PARTNER | Decline booking with reason |
-
-#### Bookings — `/api/v1/bookings`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/hold` | CUSTOMER | Reserve slot (15-min TTL) |
-| POST | `/` | CUSTOMER | Confirm booking (atomic transaction) |
-| GET | `/` | CUSTOMER | List own bookings |
-| POST | `/:id/cancel` | CUSTOMER | Cancel booking |
-
-#### Media — `/api/v1/media`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/proxy?url=<imageUrl>` | — | Optimized image proxy (caching, compression) |
-
-#### Users — `/api/v1/users`
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/:id` | JWT | Get user profile |
-| PATCH | `/:id` | JWT | Update first/last name |
-
-### Architecture
-
-```
-Router → validate(Zod) → authenticate → authorize(Role) → Controller → Service → Repository → Prisma
-```
-
-### Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `users` | Auth + roles (CUSTOMER / PARTNER / ADMIN) |
-| `otp_tokens` | Email OTP verification (10-min TTL) |
-| `properties` | Partner listings (DRAFT / ACTIVE / PAUSED) |
-| `room_types` | Rooms within a property |
-| `rate_plans` | Pricing tiers (STANDARD / NON_REFUNDABLE / WEEKLY) |
-| `availability` | Per-date availability grid |
-| `availability_holds` | 15-min reservation locks (GC job) |
-| `bookings` | Confirmed reservations (confirmationNumber + PIN) |
-| `payment_simulations` | Audit log for simulated card payments |
-
-### Seeded Test Accounts
-
-| Role | Email | Password |
-|------|-------|----------|
-| ADMIN | admin@app.com | Admin@123 |
-| PARTNER | partner@app.com | Partner@123 |
-| CUSTOMER | customer@app.com | Customer@123 |
-
----
-
-## 🖥️ Client — React Web App
-
-> **Port:** `3000` &nbsp;|&nbsp; Proxies `/api` → `http://localhost:3001`
-
-### Environment Variables (`client/.env`)
+### Web Client (`client/.env`)
 
 ```env
 VITE_API_URL=http://localhost:3001/api/v1
@@ -194,192 +218,103 @@ VITE_WS_URL=ws://localhost:3001
 VITE_ENV=development
 ```
 
-### Key Commands
+---
 
+## 🔐 Seeded Test Accounts
+
+Running `npm run db:seed` inside `server/` populates your local PostgreSQL database with pre-configured accounts:
+
+| Role | Email | Password | Allowed Actions |
+| :--- | :--- | :--- | :--- |
+| **ADMIN** | `admin@app.com` | `Admin@123` | Platform oversight, system management |
+| **PARTNER** | `partner@app.com` | `Partner@123` | Property listings CRUD, KYC submission, booking approvals |
+| **CUSTOMER** | `customer@app.com` | `Customer@123` | Search properties, place 15-min holds, complete bookings |
+
+> ℹ️ **Dev OTP**: In development mode, email OTP codes are output directly to the backend terminal log as `[DEV] OTP email to <email>: <code>`.
+
+---
+
+## 🌐 Key API Endpoints (`/api/v1`)
+
+| Module | Method | Route Path | Auth Guard | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **Auth** | `POST` | `/auth/register` | Public | Create account & dispatch OTP |
+| **Auth** | `POST` | `/auth/verify-otp` | Public | Validate OTP → returns JWT access token |
+| **Auth** | `POST` | `/auth/login` | Public | Authenticate → returns access & refresh tokens |
+| **Auth** | `POST` | `/auth/refresh` | Public | Rotate expired access token |
+| **Search** | `GET` | `/search?destination=&checkin=&checkout=` | Public | Full-text & availability search with filtering |
+| **Search** | `GET` | `/search/suggestions?q=` | Public | City autocomplete (`ILIKE`) |
+| **Properties**| `GET` | `/properties/:id` | Public | Property overview, room types & rate plans |
+| **Properties**| `POST` | `/properties` | Partner/Admin | Create new draft listing |
+| **Properties**| `POST` | `/properties/:id/publish` | Owner | Publish listing (DRAFT → ACTIVE) |
+| **Partners** | `POST` | `/partners/kyc` | Partner | Submit partner identity & address KYC |
+| **Bookings** | `POST` | `/bookings/hold` | Customer | Lock room availability for 15 minutes |
+| **Bookings** | `POST` | `/bookings` | Customer | Confirm atomic booking transaction |
+| **Bookings** | `GET` | `/bookings` | Customer | Fetch user's booking history |
+| **Bookings** | `POST` | `/bookings/:id/cancel` | Customer | Cancel booking & unlock availability grid |
+| **Media** | `GET` | `/media/proxy?url=` | Public | Optimized image proxy & caching |
+
+---
+
+## 🧪 Testing & Verification
+
+### Monorepo Commands (Root)
 ```bash
-npm run dev          # Vite dev server with HMR
-npm run build        # TypeScript compile + Vite bundle → dist/
-npm run lint         # ESLint
+npm run dev        # Run server + client in parallel via Turborepo
+npm run build      # Build all workspaces
+npm run lint       # Run linters across workspaces
 ```
 
-### Pages & Routes
-
-| Route | Page | Auth | Status |
-|-------|------|------|--------|
-| `/` | Search / Home | — | ✅ Hero + search + explore categories + filtering/sorting |
-| `/login` | Login | — | ✅ |
-| `/register` | Register | — | ✅ |
-| `/verify-otp` | OTP Verify | — | ✅ 6-digit, auto-advance, resend |
-| `/property/:id` | Property Detail | — | ✅ Rooms, amenities, reserve |
-| `/checkout/details` | Guest Details | 🔒 | ✅ |
-| `/checkout/payment` | Payment | 🔒 | ✅ Card form + price summary |
-| `/booking/confirmation/:id` | Confirmation | 🔒 | ✅ PIN + confetti |
-| `/trips` | My Trips | 🔒 | ✅ Past / Cancelled tabs with counts |
-| `/partner/dashboard` | Partner Dashboard | 🔒 PARTNER | ⚠️ WIP — onboarding flow |
-| `/partner/onboarding` | Partner Onboarding | 🔒 PARTNER | ⚠️ WIP — KYC validation |
-| `/partner/bookings` | Partner Bookings | 🔒 PARTNER | ⚠️ WIP — approve/decline |
-| `/partner/properties` | Partner Properties | 🔒 PARTNER | ⚠️ WIP |
-
-### State Management
-
-| Store | Library | Persisted | Purpose |
-|-------|---------|-----------|---------|
-| `auth.store.ts` | Zustand | ✅ localStorage | User, accessToken, refreshToken |
-| `checkout.store.ts` | Zustand | ❌ | Room selection, guest details, holdId |
-
-### Customer Booking Flow
-
-```
-/ (Search) → /property/:id (Pick Room → POST /hold)
-  → /checkout/details (Guest info)
-    → /checkout/payment (Card → POST /bookings)
-      → /booking/confirmation/:id (Number + PIN)
-```
-
----
-
-## 📱 Flutter — Mobile App
-
-> **Target:** Android & iOS &nbsp;|&nbsp; Customer-facing only
-
-### Key Commands
-
+### Backend (`server/`)
 ```bash
-flutter pub get                                              # Install dependencies
-flutter run                                                  # Run on device/emulator
-flutter analyze                                              # Static analysis (0 errors required)
-flutter test                                                 # Unit tests
-flutter build apk --release                                  # Android APK
-flutter build ios --release                                  # iOS (macOS only)
-flutter pub run build_runner build --delete-conflicting-outputs  # Code generation
+npm run lint       # ESLint check
+npm run build      # Compile TypeScript → dist/
+npm run db:studio  # Open Prisma Studio UI at http://localhost:5555
 ```
 
-### Architecture — Clean Architecture + BLoC
-
-```
-Presentation (BLoC/Cubit) → Domain (Use Cases, Entities, abstract Repos)
-                                  ↑
-                          Data (Models, DataSources, Repository Impl)
+### Web Client (`client/`)
+```bash
+npm run lint       # ESLint check
+npm run build      # TypeScript compile & Vite production bundle
 ```
 
-| Layer | Responsibility |
-|-------|---------------|
-| **Domain** | Pure Dart — entities, use cases, abstract repository interfaces |
-| **Data** | JSON models, Dio data sources, concrete repository implementations |
-| **Presentation** | BLoC/Cubit for state, Pages dispatch events, Widgets are pure view |
-
-### Project Structure
-
-```
-lib/
-├── main.dart                        ← DI init + runApp
-├── app.dart                         ← MaterialApp.router + AppTheme
-├── injection_container.dart         ← GetIt registrations (factory + singleton)
-├── core/
-│   ├── constants/app_constants.dart ← BASE_URL, timeouts
-│   ├── errors/                      ← Failures, Exceptions
-│   ├── network/                     ← DioClient, JWT AuthInterceptor
-│   ├── theme/                       ← AppColors, AppTheme, AppTextStyles
-│   ├── utils/                       ← date_utils, currency_utils
-│   └── router/app_router.dart       ← go_router + auth guard + KeyboardDismissObserver
-└── features/
-    ├── auth/                        ← Splash, Login, Register, OTP, Profile
-    ├── search/                      ← Home, Explore India, Search Results
-    ├── property/                    ← Property Detail, Amenities, Rooms
-    ├── checkout/                    ← Guest Details, Payment, Confirmation (animated)
-    └── trips/                       ← My Trips (Past/Cancelled tabs with counts), Trip Detail
-```
-
-### Feature Status
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Auth (Splash → Login → Register → OTP) | ✅ | JWT + SecureStorage |
-| Profile Page (editable name, read-only email) | ✅ | PATCH `/users/:id` |
-| Home (Explore India, Featured, Pull-to-refresh) | ✅ | BLoC |
-| Property Detail (Images, Amenities, Rooms) | ✅ | Sliver AppBar |
-| Checkout (Hold → Guest → Payment → Confirmation) | ✅ | Animated confetti |
-| My Trips (Past + Cancelled with counts) | ✅ | Tab badges |
-| Back-stack management | ✅ | go_router + canPop guards |
-| Global keyboard dismiss on navigation | ✅ | NavigatorObserver |
-| Indian mobile number validation | ✅ | 10-digit, starts 6-9 |
-
-### Navigation
-
-All screens use **go_router**:
-- `pushNamed` for drill-down (preserves back-stack)
-- `goNamed` for root-level replacement (home, login)
-- `canPop()` guard on all back buttons to prevent crash on root routes
-- `_KeyboardDismissObserver` in GoRouter dismisses keyboard on every route change
-
-### Design System Colors
-
-```dart
-primary:    #003580  // Navy blue
-accent:     #FFCC00  // Yellow CTA
-success:    #00875A  // Green
-danger:     #D32F2F  // Red
-background: #F2F6FA  // Light grey
-text:       #1A1A2E  // Near black
-muted:      #6B7280  // Grey
+### Mobile App (`flutter/`)
+```bash
+flutter analyze    # Static analysis (must maintain 0 warnings/errors)
+flutter test       # Run unit & widget tests
 ```
 
 ---
 
-## 🔐 Auth Flow (All Clients)
+## 🔀 Branching & Development Workflow
 
-```
-POST /register → OTP sent to email (logged to terminal in dev)
-POST /verify-otp → returns accessToken (no refresh on register)
-POST /login → returns { accessToken (1h), refreshToken (7d) }
-
-On 401 → auto-refresh → retry → on failure: logout + redirect to login
-```
-
-Tokens stored in:
-- **Web**: Zustand `persist` (localStorage)
-- **Mobile**: `flutter_secure_storage` (Keychain / Keystore)
+1. Sync local develop branch: `git checkout develop && git pull`
+2. Create feature branch: `git checkout -b feat/<feature-name>`
+3. Ensure linting and build verification pass locally.
+4. Submit PR to `develop` branch for review.
 
 ---
 
-## 🗺️ Roadmap — In Progress & Phase 3
+## 📚 Documentation Matrix
 
-### In Progress
-| Feature | Component | Status |
-|---------|-----------|--------|
-| Partner onboarding with KYC validation | Server + Client | 🔄 Phone + identity + address validation |
-| Search with filtering & categories | Server + Client | 🔄 Sorting, category chips, exploratory results |
-| Media proxy router (image optimization) | Server | 🔄 Centralized image proxy |
-
-### Phase 3 — Backlog
-| Feature | Component |
-|---------|-----------|
-| Real OTP email (Nodemailer / Resend) | Server |
-| Property image upload (S3 / Cloudinary) | Server + Client |
-| Admin panel | Server + Client |
-| Date picker with blocked-date awareness | Client + Flutter |
-| Razorpay payment integration | Client + Flutter |
-| WebSocket real-time updates | Server + Client |
-| Redis caching | Server |
-| Push notifications | Flutter |
+| Document | Location | Focus Area |
+| :--- | :--- | :--- |
+| **Master Documentation** | [`Documentation/Claude_web/final_documentation.md`](Documentation/Claude_web/final_documentation.md) | End-to-end system design, DB schema, flow charts & feature specs |
+| **Fullstack Setup Guide** | [`Documentation/Claude_web/fullstack-guide.md`](Documentation/Claude_web/fullstack-guide.md) | Step-by-step developer environment setup |
+| **Server Reference** | [`server/CLAUDE.md`](server/CLAUDE.md) | API architecture, Express modules, Prisma models, hold GC job |
+| **Web Client Reference** | [`client/CLAUDE.md`](client/CLAUDE.md) | Component tree, Zustand stores, RHF forms, design tokens |
+| **Mobile App Reference** | [`flutter/CLAUDE.md`](flutter/CLAUDE.md) | Clean Architecture layers, BLoC events/states, router guards |
 
 ---
 
-## ⚠️ Critical Rules (All Components)
+## ⚠️ Critical Security & Development Rules
 
-- **Never** run `git push`, `rm -rf`, raw `DELETE/DROP` SQL, or `migrate:undo:all` without explicit approval.
-- **Always** ask before any `git commit`, `git add`, `git reset`, or `git merge`.
-- Zod/form validation must run **before** any API call.
-- Never log: passwords, raw OTP codes, full JWTs, or card numbers.
-- Never store full card numbers — `card_last_four` only.
-- `flutter analyze` must pass with **0 errors** before declaring done.
+- **Never Commit Secrets**: Do not commit real `.env` or credentials. All secret templates use `.env.example`.
+- **Pre-API Validation**: Client applications must validate form data via Zod/validators prior to dispatching network requests.
+- **Sanitized Logging**: Never log passwords, raw OTP codes, full JWT tokens, or credit card numbers.
+- **Card Security**: Only store `card_last_four` — raw card data must never be saved to the database.
+- **Flutter Quality Guard**: `flutter analyze` must pass with **0 errors** before pushing mobile changes.
 
----
+## 📄 License
 
-## 📄 Component Documentation
-
-For detailed per-component documentation, see:
-
-- [`server/CLAUDE.md`](./server/CLAUDE.md) — API routes, module pattern, DB schema, booking transaction
-- [`client/CLAUDE.md`](./client/CLAUDE.md) — Pages, state management, form pattern, design tokens
-- [`flutter/CLAUDE.md`](./flutter/CLAUDE.md) — Clean Architecture layers, BLoC pattern, token lifecycle
+Proprietary — All rights reserved.
